@@ -76,10 +76,5 @@ Security Auditing: Perform security audits on systems that you have authorizatio
 
 Note: This tool should only be used in environments where you have explicit permission to record and monitor data.
 
-License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-
----
 
